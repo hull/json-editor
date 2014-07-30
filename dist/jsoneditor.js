@@ -272,10 +272,22 @@ JSONEditor.prototype = {
   },
   validate: function(value) {
     if(!this.ready) throw "JSON Editor not ready yet.  Listen for 'ready' event before validating";
-    
+
     // Custom value
     if(arguments.length === 1) {
-      return this.validator.validate(value);
+      if (true === value) {
+        this.validation_results = this.validator.validate(this.root.getValue());
+        for (var name in this.editors) {
+          if (!this.editors.hasOwnProperty(name) || !this.editors[name]) {
+            continue;
+          }
+          this.editors[name].is_dirty = true;
+        }
+        this.root.showValidationErrors(this.validation_results);
+        return this.validation_results;
+      } else {
+        return this.validator.validate(value);
+      }
     }
     // Current value (use cached result)
     else {
@@ -1622,7 +1634,7 @@ JSONEditor.AbstractEditor = Class.extend({
     return null;
   },
   getTitle: function() {
-    return this.schema.title || this.key;
+    return this.jsoneditor.translate(this.key, null, this.schema);
   },
   enable: function() {
     this.disabled = false;
@@ -4752,6 +4764,9 @@ JSONEditor.defaults.editors.select = JSONEditor.AbstractEditor.extend({
     this.input.value = this.enum_options[this.enum_values.indexOf(sanitized)];
     this.value = sanitized;
     this.jsoneditor.notifyWatchers(this.path);
+    if(this.isSelect2Used()) {
+      window.jQuery(this.input).trigger('change');
+    }
   },
   register: function() {
     this._super();
@@ -4829,23 +4844,32 @@ JSONEditor.defaults.editors.select = JSONEditor.AbstractEditor.extend({
       this.input.disabled = true;
     }
 
-    this.input.addEventListener('change',function(e) {
+    function changeListener(e) {
       e.preventDefault();
       e.stopPropagation();
-      
+
       var val = this.value;
 
       var sanitized = val;
-      if(self.enum_options.indexOf(val) === -1) {
+      if (self.enum_options.indexOf(val) === -1) {
         sanitized = self.enum_options[0];
       }
 
       self.value = self.enum_values[self.enum_options.indexOf(val)];
-      
-      if(self.parent) self.parent.onChildEditorChange(self);
-      else self.jsoneditor.onChange();
+
+      if (self.parent) {
+        self.parent.onChildEditorChange(self);
+      } else {
+        self.jsoneditor.onChange();
+      }
       self.jsoneditor.notifyWatchers(self.path);
-    });
+    }
+
+    if(this.isSelect2Used()) {
+      window.jQuery(this.input).on('change', changeListener);
+    } else {
+      this.input.addEventListener('change', changeListener);
+    }
 
     this.control = this.theme.getFormControl(this.label, this.input, this.description);
     this.container.appendChild(this.control);
@@ -4853,7 +4877,7 @@ JSONEditor.defaults.editors.select = JSONEditor.AbstractEditor.extend({
     this.value = this.enum_values[0];
 
     // If the Select2 library is loaded use it when we have lots of items
-    if(window.jQuery && window.jQuery.fn && window.jQuery.fn.select2 && this.enum_options.length > 2) {
+    if(this.isSelect2Used()) {
       window.jQuery(this.input).select2();
     }
   },
@@ -4875,9 +4899,12 @@ JSONEditor.defaults.editors.select = JSONEditor.AbstractEditor.extend({
     if(this.input && this.input.parentNode) this.input.parentNode.removeChild(this.input);
 
     this._super();
+  },
+  isSelect2Used: function ()
+  {
+    return window.jQuery && window.jQuery.fn && window.jQuery.fn.select2 && this.enum_options.length > 2;
   }
 });
-
 JSONEditor.defaults.editors.multiselect = JSONEditor.AbstractEditor.extend({
   preBuild: function() {
     this._super();
@@ -6458,20 +6485,31 @@ JSONEditor.defaults.template = 'default';
 JSONEditor.defaults.options = {};
 
 // String translate function
-JSONEditor.defaults.translate = function(key, variables) {
+JSONEditor.defaults.translate = function (key, variables, translatable) {
   var lang = JSONEditor.defaults.languages[JSONEditor.defaults.language];
-  if(!lang) throw "Unknown language "+JSONEditor.defaults.language;
-  
-  var string = lang[key] || JSONEditor.defaults.languages[JSONEditor.defaults.default_language][key];
-  
-  if(typeof string === "undefined") throw "Unknown translate string "+key;
-  
-  if(variables) {
-    for(var i=0; i<variables.length; i++) {
-      string = string.replace(new RegExp('\\{\\{'+i+'}}','g'),variables[i]);
+  if (!lang) throw "Unknown language " + JSONEditor.defaults.language;
+
+  var string;
+  if (translatable) {
+    if (translatable.translation) {
+      string = translatable.translation[JSONEditor.defaults.language] || translatable.translation[JSONEditor.defaults.default_language];
+    } else {
+      string = translatable[JSONEditor.defaults.language] || translatable[JSONEditor.defaults.default_language];
+    }
+  } else {
+    string = lang[key] || JSONEditor.defaults.languages[JSONEditor.defaults.default_language][key];
+  }
+
+  if (typeof string === "undefined") {
+    string = key;
+  }
+
+  if (variables) {
+    for (var i = 0; i < variables.length; i++) {
+      string = string.replace(new RegExp('\\{\\{' + i + '}}', 'g'), variables[i]);
     }
   }
-  
+
   return string;
 };
 
