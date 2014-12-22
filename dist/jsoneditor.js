@@ -977,7 +977,7 @@ JSONEditor.Validator = Class.extend({
     if(typeof value === "number") {
       // `multipleOf` and `divisibleBy`
       if(schema.multipleOf || schema.divisibleBy) {
-        valid = value / (schema.multipleOf || schema.divisibleBy);
+        valid = (1000 * value) / (1000 * (schema.multipleOf || schema.divisibleBy));
         if(valid !== Math.floor(valid)) {
           errors.push({
             path: path,
@@ -1038,7 +1038,7 @@ JSONEditor.Validator = Class.extend({
 
       // `minLength`
       if(schema.minLength) {
-        if((value+"").length < schema.minLength) {          
+        if((value+"").length < schema.minLength) {
           errors.push({
             path: path,
             property: 'minLength',
